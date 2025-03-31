@@ -10,6 +10,11 @@ import dash_bootstrap_components as dbc
 from app.main import app
 from app.utils import create_kpi_card, PALETTE_COLORI, genera_dati_simulati
 import plotly.express as px
+import pdfkit
+import plotly.express as px
+import base64
+from io import BytesIO
+import pandas as pd
 
 
 # 1) Rigenerazione dati
@@ -50,17 +55,13 @@ def aggiorna_dashboard(start_date, end_date, variabili, quality_range, data_json
     # Filtro per le date
     mask = (df['Data'] >= start_date) & (df['Data'] <= end_date)
     df_filtrato = df.loc[mask]
-
     # Filtro per la qualità del suolo
     q_min, q_max = quality_range
     df_filtrato = df_filtrato[
         (df_filtrato['Qualità suolo (%)'] >= q_min) &
         (df_filtrato['Qualità suolo (%)'] <= q_max)
     ]
-
-    # ---------------------------
-    # GRAFICO LINE (invariato)
-    # ---------------------------
+    # GRAFICO LINE
     fig_line = go.Figure()
     colori = list(PALETTE_COLORI.values())
     for idx, var in enumerate(variabili):
@@ -79,10 +80,7 @@ def aggiorna_dashboard(start_date, end_date, variabili, quality_range, data_json
         yaxis=dict(title='Valore'),
         legend=dict(orientation='h', y=-0.2, x=0.5, xanchor='center')
     )
-
-    # ---------------------------
-    # GRAFICO SCATTER (invariato)
-    # ---------------------------
+    # GRAFICO SCATTER
     fig_scatter = px.scatter(
         df_filtrato,
         x=scatter_x,
@@ -92,10 +90,7 @@ def aggiorna_dashboard(start_date, end_date, variabili, quality_range, data_json
         template="plotly_white",
         title=f"Correlazione tra {scatter_x} e {scatter_y}"
     )
-
-    # ---------------------------
-    # GRAFICO HISTOGRAMMA (invariato)
-    # ---------------------------
+    # GRAFICO HISTOGRAMMA
     df_filtrato['Mese'] = df_filtrato['Data'].dt.strftime('%b')
     fig_hist = px.histogram(
         df_filtrato,
@@ -113,9 +108,6 @@ def aggiorna_dashboard(start_date, end_date, variabili, quality_range, data_json
         legend_title_text='Mese'
     )
 
-    # ---------------------------
-    # KPI CARDS ESISTENTI
-    # ---------------------------
     produzione_totale = df_filtrato['Quantità raccolto (kg)'].sum()
     profitto_totale = df_filtrato['Profitto stimato (€)'].sum()
     temperatura_media = df_filtrato['Temperatura (°C)'].mean()
@@ -140,7 +132,6 @@ def aggiorna_dashboard(start_date, end_date, variabili, quality_range, data_json
                                 tooltip_text="Qualità media del suolo nel periodo."), md=2)
     ], justify="center")
 
-    # --- INIZIO MODIFICHE: Nuovi KPI ---
     # Calcolo costi e ricavi per margine netto
     if 'Costo produzione (€)' in df_filtrato.columns:
         costo_produzione_tot = df_filtrato['Costo produzione (€)'].sum()
@@ -195,7 +186,6 @@ def aggiorna_dashboard(start_date, end_date, variabili, quality_range, data_json
         html.Br(),
         kpi_cards_extra
     ])
-    # --- FINE MODIFICHE ---
 
     # Alert
     alert_df = df_filtrato[df_filtrato['Alert'] != "OK"]
@@ -375,11 +365,6 @@ def download_forecast_data(n_clicks, end_date, data_json):
     prevent_initial_call=True,
 )
 def genera_report_pdf(n_clicks, start_date, end_date, data_json):
-    import pdfkit
-    import plotly.express as px
-    import base64
-    from io import BytesIO
-    import pandas as pd
 
     # Converte i dati dal JSON in DataFrame
     df = pd.read_json(data_json, orient="split")
